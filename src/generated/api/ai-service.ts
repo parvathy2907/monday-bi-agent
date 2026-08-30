@@ -86,20 +86,29 @@ export async function executeAiRequest(
 function getMockResponse(prompt: string): string {
   const query = prompt.toLowerCase();
 
-  // Extract the VERIFIED AGGREGATED DATA JSON segment from the prompt
-  const dataMatch = prompt.match(/VERIFIED AGGREGATED DATA:\s*\n(.*?)\n\s*\n/s);
+  // Extract the VERIFIED AGGREGATED DATA JSON block from the prompt
+  // The block starts after "VERIFIED AGGREGATED DATA:" and ends before "QUERY INTERPRETATION RULES:"
   let data: any = null;
-  if (dataMatch) {
+  const dataStart = prompt.indexOf('VERIFIED AGGREGATED DATA:');
+  const dataEnd = prompt.indexOf('QUERY INTERPRETATION RULES:');
+  if (dataStart !== -1 && dataEnd !== -1) {
+    const jsonSlice = prompt.slice(dataStart + 'VERIFIED AGGREGATED DATA:'.length, dataEnd).trim();
     try {
-      data = JSON.parse(dataMatch[1]);
+      data = JSON.parse(jsonSlice);
     } catch {}
   }
+
+  // Also try extracting QUESTION from the prompt to improve routing
+  const questionMatch = prompt.match(/QUESTION:\s*\n(.+)/);
+  const userQuestion = (questionMatch?.[1] || '').toLowerCase();
+  const combined = query + ' ' + userQuestion;
 
   if (!data) {
     return "No verified business data was provided in the prompt context.";
   }
 
-  if (query.includes("pipeline") || query.includes("sector")) {
+
+  if (combined.includes("pipeline") || combined.includes("sector")) {
     const lines = ["Pipeline By Sector\n"];
     for (const r of data.sector_ranking || []) {
       const crFormatted = r.value >= 10000000 ? `₹${(r.value / 10000000).toFixed(1)}Cr` :
@@ -112,7 +121,7 @@ function getMockResponse(prompt: string): string {
     return lines.join("\n").trim();
   }
 
-  if (query.includes("exposure") || query.includes("open deal")) {
+  if (combined.includes("exposure") || combined.includes("open deal") || combined.includes("open deals")) {
     const exp = data.open_deal_exposure || { total_value: 0, deal_count: 0 };
     const expFormatted = exp.total_value >= 10000000 ? `₹${(exp.total_value / 10000000).toFixed(1)}Cr` :
                          exp.total_value >= 100000 ? `₹${(exp.total_value / 100000).toFixed(1)}L` :
@@ -120,18 +129,26 @@ function getMockResponse(prompt: string): string {
     return `Open Deal Exposure\n\nWe have a total exposure of ${expFormatted} across ${exp.deal_count} open pipeline deals. The sectors involved are ranked by pipeline value under sector analysis.`;
   }
 
-  if (query.includes("billing") || query.includes("collection") || query.includes("risk")) {
+  if (combined.includes("billing") || combined.includes("collection") || combined.includes("risk")) {
     const risk = data.billing_collection_risk || { total_receivable: 0, total_billed: 0, total_collected: 0, uncollected: 0, stuck_count: 0 };
     const rec = risk.total_receivable >= 10000000 ? `₹${(risk.total_receivable / 10000000).toFixed(1)}Cr` : `₹${(risk.total_receivable / 100000).toFixed(1)}L`;
     const uncollected = risk.uncollected >= 10000000 ? `₹${(risk.uncollected / 10000000).toFixed(1)}Cr` : `₹${(risk.uncollected / 100000).toFixed(1)}L`;
     return `Billing & Collection Risk Analysis\n\n• Total Accounts Receivable: ${rec}\n• Uncollected Billed Value: ${uncollected}\n• Not Billed Count: ${risk.not_billed_count || 0} work orders\n• Stuck Bills: ${risk.stuck_count || 0} work orders\n• Partially Billed: ${risk.partially_billed_count || 0} work orders`;
   }
 
-  // Leadership update / prepare a leadership update / default fallback
+  if (combined.includes("work order") || combined.includes("completed") || combined.includes("execution")) {
+
+    const exec = data.execution_status_breakdown || {};
+    const completed = exec.completed || 0;
+    const total = data.data_quality?.work_orders?.total || 0;
+    return `Work Order Execution Status\n\n• Completed Work Orders: ${completed}\n• Total Work Orders: ${total}\n• Completion Rate: ${total > 0 ? Math.round((completed / total) * 100) : 0}%\n• In Progress: ${exec.in_progress || 0}\n• Not Started: ${exec.not_started || 0}`;
+  }
+
+  // Leadership update / default fallback
   const totalPipeline = data.pipeline_summary?.total_value_formatted || "₹0";
   const totalDeals = data.pipeline_summary?.total_deals || 0;
   const risk = data.billing_collection_risk || {};
-  const uncollected = risk.uncollected >= 10000000 ? `₹${(risk.uncollected / 10000000).toFixed(1)}Cr` : `₹${(risk.uncollected / 100000).toFixed(1)}L`;
+  const uncollected = (risk.uncollected || 0) >= 10000000 ? `₹${((risk.uncollected || 0) / 10000000).toFixed(1)}Cr` : `₹${((risk.uncollected || 0) / 100000).toFixed(1)}L`;
 
-  return `Executive Summary\n\nThis update provides an overview of the operations, pipeline, and financial risks for leadership, pulled directly from our active boards.\n\nLeadership Update\n\n• Billing & Collections: Total receivables stand at ₹${(risk.total_receivable / 10000000).toFixed(1)}Cr. There is an uncollected value of ${uncollected} from already billed items.\n• Execution: We are monitoring ${data.data_quality?.work_orders?.total || 0} active work orders. ${data.billing_collection_risk?.stuck_count || 0} bills are currently stuck.\n• Pipeline: The sales pipeline contains ${totalDeals} open deals totaling ${totalPipeline} in value.\n• Risks: Main risk areas are collections backlog and incomplete metadata (e.g. ${data.data_quality?.deals?.missing_fields?.deal_value || 0} deals missing value definitions).`;
+  return `Executive Summary\n\nLeadership Update\n\n• Billing & Collections: Total receivables stand at ₹${((risk.total_receivable || 0) / 10000000).toFixed(1)}Cr. There is an uncollected value of ${uncollected} from already billed items.\n• Execution: Monitoring ${data.data_quality?.work_orders?.total || 0} active work orders. ${data.billing_collection_risk?.stuck_count || 0} bills are currently stuck.\n• Pipeline: The sales pipeline contains ${totalDeals} open deals totaling ${totalPipeline} in value.\n• Risks: Main risk areas are collections backlog and incomplete metadata (${data.data_quality?.deals?.missing_fields?.deal_value || 0} deals missing value).`;
 }
