@@ -4,18 +4,6 @@
 
 ---
 
-## 🎥 Demo
-
-> 📹 **[Watch the demo video](YOUR_DEMO_VIDEO_LINK_HERE)**
-
-Example questions you can ask:
-- *"What is our exposure in open deals?"*
-- *"Give me pipeline by sector"*
-- *"What are our billing risks?"*
-- *"How many work orders are completed?"*
-
----
-
 ## 🏗️ Architecture
 
 ```mermaid
