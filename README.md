@@ -1,40 +1,90 @@
 # Skylark Drones — Monday.com BI Agent
 
-A conversational Business Intelligence agent built with **React**, **TanStack Start**, and **Google Gemini** that connects live to **Monday.com** boards and answers executive-level questions about sales pipeline, execution status, billing collections, and data quality.
+> A conversational Business Intelligence agent that connects live to **Monday.com** boards and answers executive-level questions about sales pipeline, execution status, billing risks, and data quality — powered by **React**, **TanStack Start**, and **Google Gemini**.
 
 ---
 
-## Demo
+## 🎥 Demo
 
-Ask questions like:
+> 📹 **[Watch the demo video](YOUR_DEMO_VIDEO_LINK_HERE)**
+
+Example questions you can ask:
 - *"What is our exposure in open deals?"*
 - *"Give me pipeline by sector"*
 - *"What are our billing risks?"*
 - *"How many work orders are completed?"*
 
-The agent fetches live data from Monday.com, performs deterministic calculations on the server, and returns concise, accurate answers powered by Gemini AI.
-
 ---
 
-## Architecture Overview
+## 🏗️ Architecture
+
+```mermaid
+flowchart TD
+    User(["👤 Founder / Executive\n(Browser)"])
+
+    subgraph Frontend ["🖥️ Frontend — React + Tailwind CSS v4"]
+        UI["Chat UI\nGlassmorphic Theme\nStarter Questions"]
+    end
+
+    subgraph Server ["⚙️ Server — TanStack Start Server Functions"]
+        direction TB
+        SF["processQuery()\ncreateServerFn POST"]
+        AGG["Deterministic Aggregations\n• open_deal_exposure\n• pipeline_by_sector\n• billing_collection_risk\n• execution_status_breakdown"]
+        PROMPT["Query Routing & Prompt\nBuilding (Gemini)"]
+        SF --> AGG --> PROMPT
+    end
+
+    subgraph Data ["📊 Data Layer"]
+        SDK["BoardSDK\nMonday.com GraphQL Client\nDynamic Column Mapping"]
+        MOCK[("Local JSON Mock\nFallback Dataset")]
+        SDK -->|"API unreachable"| MOCK
+    end
+
+    subgraph AI ["🤖 AI Layer"]
+        GEMINI["Google Gemini 3.6 Flash\nGenerative Language API"]
+    end
+
+    subgraph Monday ["📋 Monday.com Boards"]
+        WO["Work Order\nTracker Board\n176 items"]
+        DEAL["Deal Funnel\nBoard\n346 items"]
+    end
+
+    User -->|"Natural language query"| UI
+    UI -->|"HTTP POST"| SF
+    SDK -->|"GraphQL fetch"| WO
+    SDK -->|"GraphQL fetch"| DEAL
+    AGG -->|"Fetch raw items"| SDK
+    PROMPT -->|"Verified aggregations\n+ user query"| GEMINI
+    GEMINI -->|"Plain-text answer"| UI
+    UI -->|"Rendered response"| User
+
+    style Frontend fill:#1e1b4b,stroke:#6366f1,color:#e0e7ff
+    style Server fill:#0f172a,stroke:#22d3ee,color:#e0f7fa
+    style Data fill:#14532d,stroke:#4ade80,color:#dcfce7
+    style AI fill:#431407,stroke:#fb923c,color:#fff7ed
+    style Monday fill:#1a1a2e,stroke:#a78bfa,color:#ede9fe
+```
+
+### How a query flows through the system
 
 ```
-User (Browser)
-    ↕ React Chat UI (Glassmorphic Theme)
-    ↕ TanStack Start Server Functions (processQuery)
-    ↕                    ↕
-BoardSDK           AI Service
-(Monday.com        (Gemini 3.6 Flash)
- GraphQL API)
-    ↕
-Live Monday.com Boards
-(fallback: local JSON mock data)
+1. User types: "What is our exposure in open deals?"
+       ↓
+2. React UI → POST to TanStack Server Function
+       ↓
+3. Server fetches 346 deals + 176 work orders from Monday.com GraphQL
+       ↓
+4. TypeScript computes deterministic aggregations (no AI math):
+   • Filters deals where dealStatus === "Open" → 49 deals
+   • Sums maskedDealValue → ₹68.8Cr
+   • Groups by sector → Tender ₹53.2Cr, Railways ₹5.2Cr ...
+       ↓
+5. Verified numbers + user question → sent to Gemini 3.6 Flash
+       ↓
+6. Gemini returns plain-text executive summary (no JSON, no hallucinations)
+       ↓
+7. Response rendered in chat UI
 ```
-
-- **Frontend** — React + Tailwind CSS v4 with glassmorphism, ambient glows, and starter questions
-- **Server Functions** — TanStack Start `createServerFn` keeps API keys secure on the server and performs all arithmetic deterministically (no LLM math)
-- **BoardSDK** — Connects to Monday.com GraphQL, dynamically maps columns by human-readable header titles, falls back to local JSON if credentials are missing
-- **AI Service** — Gemini 3.6 Flash interprets pre-calculated aggregations and returns plain-text executive summaries
 
 ---
 
