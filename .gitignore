@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Production Build
+dist/
+
+# Local Environment (Secret API Keys - MUST NOT BE COMMITTED)
+.env
+.env*.local
+
+# System/IDE Caches
+.DS_Store
+.tanstack/
+.gemini/
+*.log
+app.config.timestamp_*.js
